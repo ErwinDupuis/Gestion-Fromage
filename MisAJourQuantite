@@ -1,0 +1,61 @@
+        private void MiseAJourQuantite()
+        {
+            MySqlConnection conn = null;
+            try
+            {
+                string stringDeConnexion = "server=127.0.0.1;uid=adminFromage;" + "pwd=;database=;";
+                conn = new MySqlConnection(stringDeConnexion);
+                conn.Open();
+
+                int idFromage;
+                int quantite;
+
+                int i = 0;
+
+                string queryDate = "SELECT idFromage, quantite from affinage WHERE dAffinage = 'YEAR(NOW())-MONTH(NOW())-DAY(NOW())'";
+                MySqlCommand cmdDate = new MySqlCommand(queryDate, conn);
+                MySqlDataReader readerDate = cmdDate.ExecuteReader();
+
+                if (readerDate.HasRows)
+                {
+                    while (readerDate.Read())
+                    {
+                        try
+                        {
+                            idFromage = Convert.ToInt32(readerDate["idFromage"]);
+                            quantite = Convert.ToInt32(readerDate["quantite"]);
+                            eventLog1.WriteEntry("idFromage : " + idFromage + " quantite : " + quantite);
+
+                            string update = "UPDATE fromage SET quantite = quantite +" + quantite + " WHERE idFromage = " + idFromage;
+                            MySqlCommand cmdUpdate = new MySqlCommand(update, conn);
+                            cmdUpdate.ExecuteNonQuery();
+
+                            string delete = "DELETE * FROM affinage WHERE dAffinage = 'YEAR(NOW())-MONTH(NOW())-DAY(NOW())'";
+                            MySqlCommand cmdDelete = new MySqlCommand(delete, conn);
+                            cmdDelete.ExecuteNonQuery();
+
+                            i = i + 2;
+                        }
+                        catch (Exception e)
+                        {
+                            eventLog1.WriteEntry(e.Message);
+                        }
+                    }
+                }
+                else
+                    eventLog1.WriteEntry("Pas de fin d'affinage pour aujourd'hui.");
+
+                readerDate.Close();
+
+
+            }
+            catch (MySqlException ex)
+            {
+                eventLog1.WriteEntry(ex.Message);
+            }
+            finally
+            {
+                if (conn != null)
+                    conn.Close();
+            }
+        }
