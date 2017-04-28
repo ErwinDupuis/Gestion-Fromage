@@ -1,0 +1,94 @@
+        private static void VerificationStock()
+        {
+            MySqlConnection conn = null;
+
+            try
+            {               
+                string myConnectionString = "server=127.0.0.1;uid=e;" +"pwd=;database=;";
+                conn = new MySqlConnection(myConnectionString);
+                conn.Open();
+                Console.WriteLine("Connexion à la base de données réussie.");
+
+                int n = 1;
+                DateTime j = DateTime.Now;
+                List<string> nomFromage = new List<string>();
+                List<int> idFromage = new List<int>();
+                List<int> stock = new List<int>();
+                List<int> dAffinage = new List<int>();
+                List<FromageManquant> ListeFromageManquant = new List<FromageManquant>();
+
+
+                string queryFromage = "SELECT idFromage, nomFromage, stock, dAffinage FROM fromage";
+                MySqlCommand cmdFromage = new MySqlCommand(queryFromage, conn);
+                MySqlDataReader readerFromage = cmdFromage.ExecuteReader();
+
+                if (!readerFromage.HasRows)
+                    readerFromage.Close();
+                else
+                {                
+                    while (readerFromage.Read())
+                    {
+                        nomFromage.Add(Convert.ToString(readerFromage["nomFromage"]));
+                        idFromage.Add(Convert.ToInt32(readerFromage["idFromage"]));
+                        stock.Add(Convert.ToInt32(readerFromage["stock"]));
+                        dAffinage.Add(Convert.ToInt32(readerFromage["dAffinage"]));
+                    }
+                    readerFromage.Close();
+                }
+
+                for (int i = 0 ; i < nomFromage.Count(); i++)
+                {
+                    int qAffinage = 0;
+                    int qCommande = 0;
+                    List<DateTime> dateAlerte = new List<DateTime>();                    
+
+                    while (n < dAffinage[i])
+                    {
+                        string query = "SELECT SUM(affinage.quantite) as qAffinage, SUM(commande.quantite) as qCommande FROM affinage, commande WHERE date(dateCreation + interval dAffinage day) BETWEEN current_date() AND current_date()+interval "+n+" day AND dateLivraison BETWEEN current_date() AND current_date()+interval "+n+" day AND commande.idFromage = "+idFromage[i]+" AND commande.idFromage = affinage.idFromage";
+                        MySqlCommand cmd = new MySqlCommand(query, conn);
+                        MySqlDataReader reader = cmd.ExecuteReader();
+                        if (reader.HasRows)
+                        {
+                            reader.Read();
+                            if (!reader.IsDBNull(0))
+                            {
+                                qAffinage = reader.GetInt32(0);
+                                qCommande = reader.GetInt32(1);
+                                dateAlerte.Add(j.AddDays(n));
+                            }
+                        }
+                        reader.Close();
+                        n++;
+                    }
+                    Console.WriteLine("nomFromage = " + nomFromage[i] + "; Stock = " + stock[i] + "; Durée d'affinage = " + dAffinage[i] + "; Quantité dont l'affinage sera fini = " + qAffinage + "; Quantité des commandes = " + qCommande);
+
+                    if (qAffinage + stock[i] < qCommande /*&& j.AddDays(dAffinage[i]+2) == dateAlerte[0]*/)
+                    {
+                        int manque = qCommande - (qAffinage + stock[i]);
+                        FromageManquant fromageManquant = new FromageManquant(nomFromage[i], manque, dateAlerte[0]);
+                        ListeFromageManquant.Add(fromageManquant);
+                        Console.WriteLine("Ajout à la liste des fromages manquants");
+                        //ajout à la liste des fromages qu'il manquera (idFromage + la quantite + la date)
+                    }
+                }
+                //envoi du mail avec tous les fromages et leur quantité manquant
+                if(ListeFromageManquant.Count() != 0)
+                {
+                    foreach(FromageManquant from in ListeFromageManquant)
+                    {
+                        Console.WriteLine("Il manquera " + from.quantite+" "+from.nomFromage+" pour la commande du "+from.date);
+                    }
+                    Console.WriteLine("Envoi du mail");
+                }
+
+            }
+            catch (MySqlException ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            finally
+            {
+                if (conn != null)
+                    conn.Close();
+            }
+        }
